@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.2-batch2
+Batch-2: State Persistence (ViewModel + SavedStateHandle)
+- Seluruh state navigasi (folder aktif, breadcrumb, mode sort, query search,
+  isi clipboard copy/move) dipindah dari field mentah di `MainActivity` ke
+  `MainViewModel` baru yang memakai `SavedStateHandle`.
+- Efek yang terlihat user: folder aktif, hasil sort, teks di kolom search,
+  dan clipboard "Tempel di Sini" sekarang TIDAK reset lagi saat layar
+  dirotasi atau saat Activity dipulihkan sistem dari background (process
+  death). Sebelumnya semua state ini otomatis kembali ke folder
+  penyimpanan utama setiap kali itu terjadi.
+- Listing folder tidak di-scan ulang dari disk pada rotasi layar (hanya
+  di-scan ulang kalau memang berpindah folder/process death), agar lebih
+  hemat.
+- Semua fitur Batch-1 (coroutine lifecycle-safe, search debounce
+  300ms+cancel job lama) dipertahankan utuh, hanya dipindah host-nya dari
+  `lifecycleScope` (Activity) ke `viewModelScope` (ViewModel) untuk
+  bagian listing folder & search.
+- Tidak ada fitur yang dihapus: browser folder, preview, rename batch,
+  search, copy/move/delete/zip, ukuran folder, buat folder, sort — semua
+  masih sama seperti v1.1-batch1.
+
 ## v1.1-batch1
 Batch-1: Threading & Lifecycle Safety
 - Semua operasi background (list folder, search, delete, rename batch, copy/move, zip,

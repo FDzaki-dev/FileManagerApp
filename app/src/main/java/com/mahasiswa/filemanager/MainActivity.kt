@@ -19,6 +19,7 @@ import android.widget.EditText
 import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.FileProvider
@@ -26,9 +27,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -64,19 +62,11 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var adapter: FileAdapter
 
-    private var currentDir: File = Environment.getExternalStorageDirectory()
-    private var currentEntries: List<FileEntry> = emptyList()
-    private var sortByDateDesc: Boolean = false
-
-    // Clipboard sederhana untuk operasi copy/move
-    private var clipboardFiles: List<File> = emptyList()
-    private var clipboardIsCut: Boolean = false
-
-    // Job pencarian aktif - dibatalkan tiap kali user mengetik lagi (debounce)
-    private var searchJob: Job? = null
-
-    // Job listing folder aktif - dibatalkan kalau user pindah folder lagi sebelum selesai load
-    private var dirLoadJob: Job? = null
+    // Batch-2: seluruh state navigasi (folder aktif, sort, query search,
+    // clipboard) sekarang dipegang MainViewModel + SavedStateHandle supaya
+    // bertahan saat rotasi layar maupun process death. Activity hanya
+    // membaca/menampilkan, bukan sumber kebenaran state lagi.
+    private val viewModel: MainViewModel by viewModels()
 
     private val requestPermissionLauncher =
         registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) {
@@ -95,7 +85,36 @@ class MainActivity : AppCompatActivity() {
         setupSearch()
         setupSelectionBar()
         setupPasteBar()
+        observeViewModel()
+        restorePasteBarIfNeeded()
         checkPermissionAndLoad()
+    }
+
+    // ---------------------------------------------------------------------
+    // OBSERVASI STATE DARI VIEWMODEL (Batch-2)
+    // ---------------------------------------------------------------------
+    private fun observeViewModel() {
+        viewModel.entries.observe(this) { entries ->
+            adapter.updateData(entries)
+        }
+        viewModel.isLoading.observe(this) { loading ->
+            progressBar.visibility = if (loading) View.VISIBLE else View.GONE
+        }
+        viewModel.currentDirPath.observe(this) { path ->
+            breadcrumb.text = path
+            // Selection mode selalu berakhir tiap kali pindah folder (perilaku sama seperti sebelumnya)
+            adapter.clearSelection()
+            updateSelectionBarVisibility()
+        }
+    }
+
+    /** Kalau clipboard masih terisi dari sebelum rotasi/process death, tampilkan lagi paste bar-nya. */
+    private fun restorePasteBarIfNeeded() {
+        val files = viewModel.clipboardFiles
+        if (files.isNotEmpty()) {
+            pasteInfo.text = "${files.size} item siap ditempel (${if (viewModel.clipboardIsCut) "pindah" else "salin"})"
+            pasteBar.visibility = View.VISIBLE
+        }
     }
 
     private fun bindViews() {
@@ -127,7 +146,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkPermissionAndLoad() {
         if (hasStoragePermission()) {
-            loadDirectory(currentDir)
+            viewModel.ensureLoaded()
         } else {
             requestStoragePermission()
         }
@@ -149,32 +168,10 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------------------------------------------------
     // 3. NAVIGASI FOLDER
     // ---------------------------------------------------------------------
-    private fun loadDirectory(dir: File) {
-        currentDir = dir
-        updateBreadcrumb()
-        dirLoadJob?.cancel()
-        progressBar.visibility = View.VISIBLE
-        dirLoadJob = lifecycleScope.launch {
-            val entries = withContext(Dispatchers.IO) {
-                val list = dir.listFiles()?.toList() ?: emptyList()
-                list.map { FileEntry(it) }.sortedWith(
-                    compareByDescending<FileEntry> { it.isDirectory }
-                        .thenBy { if (sortByDateDesc) 0 else it.name.lowercase() }
-                        .thenByDescending { if (sortByDateDesc) it.file.lastModified() else 0 }
-                )
-            }
-            if (!isActive) return@launch
-            progressBar.visibility = View.GONE
-            currentEntries = entries
-            adapter.updateData(entries)
-            adapter.clearSelection()
-            updateSelectionBarVisibility()
-        }
-    }
-
-    private fun updateBreadcrumb() {
-        breadcrumb.text = currentDir.absolutePath
-    }
+    // Catatan Batch-2: logika listing folder (loadDirectory) & update breadcrumb
+    // sudah dipindah ke MainViewModel supaya cancellable job & hasilnya
+    // survive rotasi layar. Activity tinggal panggil viewModel.loadDirectory(dir)
+    // dan observe hasilnya lewat observeViewModel().
 
     private fun setupRecyclerView() {
         adapter = FileAdapter(
@@ -188,7 +185,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun onEntryClick(entry: FileEntry) {
         if (entry.isDirectory) {
-            loadDirectory(entry.file)
+            viewModel.loadDirectory(entry.file)
         } else {
             previewFile(entry)
         }
@@ -200,10 +197,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun goBackOneLevel(): Boolean {
-        val parent = currentDir.parentFile
+        val current = viewModel.currentDir
+        val parent = current.parentFile
         val rootPath = Environment.getExternalStorageDirectory().absolutePath
-        if (parent != null && currentDir.absolutePath != rootPath) {
-            loadDirectory(parent)
+        if (parent != null && current.absolutePath != rootPath) {
+            viewModel.loadDirectory(parent)
             return true
         }
         return false
@@ -221,7 +219,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         if (pasteBar.visibility == View.VISIBLE) {
-            clipboardFiles = emptyList()
+            viewModel.clearClipboard()
             pasteBar.visibility = View.GONE
             return
         }
@@ -234,37 +232,23 @@ class MainActivity : AppCompatActivity() {
     // 4. SEARCH
     // ---------------------------------------------------------------------
     private fun setupSearch() {
+        // Kembalikan teks query yang tersimpan (kalau ada) SEBELUM listener
+        // dipasang, supaya tidak memicu pencarian ulang yang tidak perlu.
+        if (viewModel.searchQuery.isNotEmpty()) {
+            searchBox.setText(viewModel.searchQuery)
+        }
         searchBox.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
                 val query = s?.toString()?.trim() ?: ""
                 if (query.isEmpty()) {
-                    searchJob?.cancel()
-                    progressBar.visibility = View.GONE
-                    adapter.updateData(currentEntries)
+                    viewModel.clearSearch()
                 } else {
-                    runSearch(query)
+                    viewModel.runSearch(query)
                 }
             }
         })
-    }
-
-    private fun runSearch(query: String) {
-        searchJob?.cancel()
-        searchJob = lifecycleScope.launch {
-            delay(300) // debounce - tunggu user berhenti mengetik sebelum scan folder
-            if (!isActive) return@launch
-            progressBar.visibility = View.VISIBLE
-            val entries = withContext(Dispatchers.IO) {
-                val results = mutableListOf<File>()
-                FileOperations.searchRecursively(currentDir, query, results)
-                results.map { FileEntry(it) }
-            }
-            if (!isActive) return@launch
-            progressBar.visibility = View.GONE
-            adapter.updateData(entries)
-        }
     }
 
     // ---------------------------------------------------------------------
@@ -301,7 +285,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     progressBar.visibility = View.GONE
                     Toast.makeText(this@MainActivity, "$successCount/${selected.size} file berhasil di-rename", Toast.LENGTH_SHORT).show()
-                    loadDirectory(currentDir)
+                    viewModel.reloadCurrentDirectory()
                 }
             }
             .setNegativeButton("Batal", null)
@@ -322,7 +306,7 @@ class MainActivity : AppCompatActivity() {
                     }
                     progressBar.visibility = View.GONE
                     Toast.makeText(this@MainActivity, "$successCount/${selected.size} item dihapus", Toast.LENGTH_SHORT).show()
-                    loadDirectory(currentDir)
+                    viewModel.reloadCurrentDirectory()
                 }
             }
             .setNegativeButton("Batal", null)
@@ -333,7 +317,7 @@ class MainActivity : AppCompatActivity() {
         val selected = adapter.getSelectedFiles()
         if (selected.isEmpty()) return
         val zipName = "Archive_${System.currentTimeMillis()}.zip"
-        val destZip = File(currentDir, zipName)
+        val destZip = File(viewModel.currentDir, zipName)
         progressBar.visibility = View.VISIBLE
         lifecycleScope.launch {
             val success = withContext(Dispatchers.IO) {
@@ -345,7 +329,7 @@ class MainActivity : AppCompatActivity() {
                 if (success) "Berhasil membuat $zipName" else "Gagal membuat ZIP",
                 Toast.LENGTH_SHORT
             ).show()
-            loadDirectory(currentDir)
+            viewModel.reloadCurrentDirectory()
         }
     }
 
@@ -355,8 +339,7 @@ class MainActivity : AppCompatActivity() {
     private fun setClipboard(cut: Boolean) {
         val selected = adapter.getSelectedFiles()
         if (selected.isEmpty()) return
-        clipboardFiles = selected
-        clipboardIsCut = cut
+        viewModel.setClipboard(selected, cut)
         adapter.clearSelection()
         updateSelectionBarVisibility()
         pasteInfo.text = "${selected.size} item siap ditempel (${if (cut) "pindah" else "salin"})"
@@ -366,16 +349,16 @@ class MainActivity : AppCompatActivity() {
     private fun setupPasteBar() {
         findViewById<TextView>(R.id.btnPasteHere).setOnClickListener { pasteHere() }
         findViewById<TextView>(R.id.btnCancelPaste).setOnClickListener {
-            clipboardFiles = emptyList()
+            viewModel.clearClipboard()
             pasteBar.visibility = View.GONE
         }
     }
 
     private fun pasteHere() {
-        if (clipboardFiles.isEmpty()) return
-        val targetDir = currentDir
-        val filesToProcess = clipboardFiles
-        val isCut = clipboardIsCut
+        val filesToProcess = viewModel.clipboardFiles
+        if (filesToProcess.isEmpty()) return
+        val targetDir = viewModel.currentDir
+        val isCut = viewModel.clipboardIsCut
         progressBar.visibility = View.VISIBLE
         lifecycleScope.launch {
             val successCount = withContext(Dispatchers.IO) {
@@ -389,9 +372,9 @@ class MainActivity : AppCompatActivity() {
             }
             progressBar.visibility = View.GONE
             pasteBar.visibility = View.GONE
-            clipboardFiles = emptyList()
+            viewModel.clearClipboard()
             Toast.makeText(this@MainActivity, "$successCount/${filesToProcess.size} item berhasil ditempel", Toast.LENGTH_SHORT).show()
-            loadDirectory(currentDir)
+            viewModel.reloadCurrentDirectory()
         }
     }
 
@@ -505,8 +488,8 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Buat") { _, _ ->
                 val name = input.text.toString().trim()
                 if (name.isNotEmpty()) {
-                    val newFolder = File(currentDir, name)
-                    if (newFolder.mkdirs()) loadDirectory(currentDir)
+                    val newFolder = File(viewModel.currentDir, name)
+                    if (newFolder.mkdirs()) viewModel.reloadCurrentDirectory()
                     else Toast.makeText(this, "Gagal membuat folder", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -516,7 +499,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showFolderSizeDialog() {
         progressBar.visibility = View.VISIBLE
-        val target = currentDir
+        val target = viewModel.currentDir
         lifecycleScope.launch {
             val size = withContext(Dispatchers.IO) { FileOperations.folderSize(target) }
             progressBar.visibility = View.GONE
@@ -529,12 +512,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun toggleSort() {
-        sortByDateDesc = !sortByDateDesc
+        val nowDateDesc = viewModel.toggleSort()
         Toast.makeText(
             this,
-            if (sortByDateDesc) "Diurutkan berdasarkan tanggal terbaru" else "Diurutkan berdasarkan nama",
+            if (nowDateDesc) "Diurutkan berdasarkan tanggal terbaru" else "Diurutkan berdasarkan nama",
             Toast.LENGTH_SHORT
         ).show()
-        loadDirectory(currentDir)
     }
 }
