@@ -22,8 +22,15 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.FileProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -64,6 +71,12 @@ class MainActivity : AppCompatActivity() {
     // Clipboard sederhana untuk operasi copy/move
     private var clipboardFiles: List<File> = emptyList()
     private var clipboardIsCut: Boolean = false
+
+    // Job pencarian aktif - dibatalkan tiap kali user mengetik lagi (debounce)
+    private var searchJob: Job? = null
+
+    // Job listing folder aktif - dibatalkan kalau user pindah folder lagi sebelum selesai load
+    private var dirLoadJob: Job? = null
 
     private val requestPermissionLauncher =
         registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) {
@@ -139,16 +152,24 @@ class MainActivity : AppCompatActivity() {
     private fun loadDirectory(dir: File) {
         currentDir = dir
         updateBreadcrumb()
-        val list = dir.listFiles()?.toList() ?: emptyList()
-        val entries = list.map { FileEntry(it) }.sortedWith(
-            compareByDescending<FileEntry> { it.isDirectory }
-                .thenBy { if (sortByDateDesc) 0 else it.name.lowercase() }
-                .thenByDescending { if (sortByDateDesc) it.file.lastModified() else 0 }
-        )
-        currentEntries = entries
-        adapter.updateData(entries)
-        adapter.clearSelection()
-        updateSelectionBarVisibility()
+        dirLoadJob?.cancel()
+        progressBar.visibility = View.VISIBLE
+        dirLoadJob = lifecycleScope.launch {
+            val entries = withContext(Dispatchers.IO) {
+                val list = dir.listFiles()?.toList() ?: emptyList()
+                list.map { FileEntry(it) }.sortedWith(
+                    compareByDescending<FileEntry> { it.isDirectory }
+                        .thenBy { if (sortByDateDesc) 0 else it.name.lowercase() }
+                        .thenByDescending { if (sortByDateDesc) it.file.lastModified() else 0 }
+                )
+            }
+            if (!isActive) return@launch
+            progressBar.visibility = View.GONE
+            currentEntries = entries
+            adapter.updateData(entries)
+            adapter.clearSelection()
+            updateSelectionBarVisibility()
+        }
     }
 
     private fun updateBreadcrumb() {
@@ -219,6 +240,8 @@ class MainActivity : AppCompatActivity() {
             override fun afterTextChanged(s: Editable?) {
                 val query = s?.toString()?.trim() ?: ""
                 if (query.isEmpty()) {
+                    searchJob?.cancel()
+                    progressBar.visibility = View.GONE
                     adapter.updateData(currentEntries)
                 } else {
                     runSearch(query)
@@ -228,16 +251,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runSearch(query: String) {
-        progressBar.visibility = View.VISIBLE
-        Thread {
-            val results = mutableListOf<File>()
-            FileOperations.searchRecursively(currentDir, query, results)
-            val entries = results.map { FileEntry(it) }
-            runOnUiThread {
-                progressBar.visibility = View.GONE
-                adapter.updateData(entries)
+        searchJob?.cancel()
+        searchJob = lifecycleScope.launch {
+            delay(300) // debounce - tunggu user berhenti mengetik sebelum scan folder
+            if (!isActive) return@launch
+            progressBar.visibility = View.VISIBLE
+            val entries = withContext(Dispatchers.IO) {
+                val results = mutableListOf<File>()
+                FileOperations.searchRecursively(currentDir, query, results)
+                results.map { FileEntry(it) }
             }
-        }.start()
+            if (!isActive) return@launch
+            progressBar.visibility = View.GONE
+            adapter.updateData(entries)
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -267,10 +294,15 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Terapkan") { _, _ ->
                 val pattern = patternInput.text.toString().ifBlank { "File_{n}" }
                 val start = startNumberInput.text.toString().toIntOrNull() ?: 1
-                val results = FileOperations.batchRename(selected, pattern, start)
-                val successCount = results.count { it.second }
-                Toast.makeText(this, "$successCount/${selected.size} file berhasil di-rename", Toast.LENGTH_SHORT).show()
-                loadDirectory(currentDir)
+                progressBar.visibility = View.VISIBLE
+                lifecycleScope.launch {
+                    val successCount = withContext(Dispatchers.IO) {
+                        FileOperations.batchRename(selected, pattern, start).count { it.second }
+                    }
+                    progressBar.visibility = View.GONE
+                    Toast.makeText(this@MainActivity, "$successCount/${selected.size} file berhasil di-rename", Toast.LENGTH_SHORT).show()
+                    loadDirectory(currentDir)
+                }
             }
             .setNegativeButton("Batal", null)
             .show()
@@ -283,10 +315,15 @@ class MainActivity : AppCompatActivity() {
             .setTitle("Hapus ${selected.size} item?")
             .setMessage("Item yang dihapus tidak bisa dikembalikan.")
             .setPositiveButton("Hapus") { _, _ ->
-                var successCount = 0
-                selected.forEach { if (FileOperations.deleteRecursively(it)) successCount++ }
-                Toast.makeText(this, "$successCount/${selected.size} item dihapus", Toast.LENGTH_SHORT).show()
-                loadDirectory(currentDir)
+                progressBar.visibility = View.VISIBLE
+                lifecycleScope.launch {
+                    val successCount = withContext(Dispatchers.IO) {
+                        selected.count { FileOperations.deleteRecursively(it) }
+                    }
+                    progressBar.visibility = View.GONE
+                    Toast.makeText(this@MainActivity, "$successCount/${selected.size} item dihapus", Toast.LENGTH_SHORT).show()
+                    loadDirectory(currentDir)
+                }
             }
             .setNegativeButton("Batal", null)
             .show()
@@ -298,18 +335,18 @@ class MainActivity : AppCompatActivity() {
         val zipName = "Archive_${System.currentTimeMillis()}.zip"
         val destZip = File(currentDir, zipName)
         progressBar.visibility = View.VISIBLE
-        Thread {
-            val success = FileOperations.zipFiles(selected, destZip)
-            runOnUiThread {
-                progressBar.visibility = View.GONE
-                Toast.makeText(
-                    this,
-                    if (success) "Berhasil membuat $zipName" else "Gagal membuat ZIP",
-                    Toast.LENGTH_SHORT
-                ).show()
-                loadDirectory(currentDir)
+        lifecycleScope.launch {
+            val success = withContext(Dispatchers.IO) {
+                FileOperations.zipFiles(selected, destZip)
             }
-        }.start()
+            progressBar.visibility = View.GONE
+            Toast.makeText(
+                this@MainActivity,
+                if (success) "Berhasil membuat $zipName" else "Gagal membuat ZIP",
+                Toast.LENGTH_SHORT
+            ).show()
+            loadDirectory(currentDir)
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -337,24 +374,25 @@ class MainActivity : AppCompatActivity() {
     private fun pasteHere() {
         if (clipboardFiles.isEmpty()) return
         val targetDir = currentDir
-        progressBar.visibility = View.VISIBLE
         val filesToProcess = clipboardFiles
         val isCut = clipboardIsCut
-        Thread {
-            var successCount = 0
-            filesToProcess.forEach { file ->
-                val ok = if (isCut) FileOperations.moveFile(file, targetDir)
-                         else FileOperations.copyRecursively(file, targetDir)
-                if (ok) successCount++
+        progressBar.visibility = View.VISIBLE
+        lifecycleScope.launch {
+            val successCount = withContext(Dispatchers.IO) {
+                var count = 0
+                filesToProcess.forEach { file ->
+                    val ok = if (isCut) FileOperations.moveFile(file, targetDir)
+                             else FileOperations.copyRecursively(file, targetDir)
+                    if (ok) count++
+                }
+                count
             }
-            runOnUiThread {
-                progressBar.visibility = View.GONE
-                pasteBar.visibility = View.GONE
-                clipboardFiles = emptyList()
-                Toast.makeText(this, "$successCount/${filesToProcess.size} item berhasil ditempel", Toast.LENGTH_SHORT).show()
-                loadDirectory(currentDir)
-            }
-        }.start()
+            progressBar.visibility = View.GONE
+            pasteBar.visibility = View.GONE
+            clipboardFiles = emptyList()
+            Toast.makeText(this@MainActivity, "$successCount/${filesToProcess.size} item berhasil ditempel", Toast.LENGTH_SHORT).show()
+            loadDirectory(currentDir)
+        }
     }
 
     // ---------------------------------------------------------------------
@@ -479,17 +517,15 @@ class MainActivity : AppCompatActivity() {
     private fun showFolderSizeDialog() {
         progressBar.visibility = View.VISIBLE
         val target = currentDir
-        Thread {
-            val size = FileOperations.folderSize(target)
-            runOnUiThread {
-                progressBar.visibility = View.GONE
-                AlertDialog.Builder(this)
-                    .setTitle("Ukuran Folder")
-                    .setMessage("${target.name}: ${FileOperations.formatSize(size)}")
-                    .setPositiveButton("OK", null)
-                    .show()
-            }
-        }.start()
+        lifecycleScope.launch {
+            val size = withContext(Dispatchers.IO) { FileOperations.folderSize(target) }
+            progressBar.visibility = View.GONE
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("Ukuran Folder")
+                .setMessage("${target.name}: ${FileOperations.formatSize(size)}")
+                .setPositiveButton("OK", null)
+                .show()
+        }
     }
 
     private fun toggleSort() {
