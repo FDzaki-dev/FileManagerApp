@@ -1,6 +1,6 @@
 package com.mahasiswa.filemanager
 
-import android.app.AlertDialog
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.pdf.PdfRenderer
@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolbar: Toolbar
     private lateinit var breadcrumb: TextView
     private lateinit var searchBox: EditText
+    private lateinit var searchRow: View // Batch-8: baris search kini toggle, bukan selalu tampil
     private lateinit var progressBar: android.widget.ProgressBar
     private lateinit var selectionBar: View
     private lateinit var pasteBar: View
@@ -145,6 +146,7 @@ class MainActivity : AppCompatActivity() {
                 breadcrumb.text = viewModel.currentDirPath.value
             }
             // Search & selection tidak relevan saat browsing isi arsip di batch ini.
+            if (browsing) closeSearchRow()
             searchBox.isEnabled = !browsing
             selectionBar.visibility = if (browsing) View.GONE else selectionBar.visibility
             if (state != null) updateBreadcrumbForArchive(state)
@@ -175,6 +177,7 @@ class MainActivity : AppCompatActivity() {
         toolbar = findViewById(R.id.toolbar)
         breadcrumb = findViewById(R.id.breadcrumb)
         searchBox = findViewById(R.id.searchBox)
+        searchRow = findViewById(R.id.searchRow)
         progressBar = findViewById(R.id.progressBar)
         selectionBar = findViewById(R.id.selectionBar)
         pasteBar = findViewById(R.id.pasteBar)
@@ -334,6 +337,11 @@ class MainActivity : AppCompatActivity() {
 
     /** Dipakai baik oleh tombol back fisik maupun tombol back di toolbar. */
     private fun handleBackAction() {
+        // Batch-8: kalau search row sedang terbuka, back menutup search dulu (perilaku umum).
+        if (searchRow.visibility == View.VISIBLE) {
+            closeSearchRow()
+            return
+        }
         // Batch-5: kalau sedang browsing arsip, back naik satu level virtual dulu;
         // baru kalau sudah di akar arsip, back berikutnya keluar ke listing folder biasa.
         if (viewModel.isBrowsingArchive) {
@@ -365,6 +373,7 @@ class MainActivity : AppCompatActivity() {
         // dipasang, supaya tidak memicu pencarian ulang yang tidak perlu.
         if (viewModel.searchQuery.isNotEmpty()) {
             searchBox.setText(viewModel.searchQuery)
+            searchRow.visibility = View.VISIBLE // Batch-8: search row toggle, tampilkan lagi kalau query masih aktif
         }
         searchBox.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -402,7 +411,7 @@ class MainActivity : AppCompatActivity() {
         val patternInput = dialogView.findViewById<EditText>(R.id.patternInput)
         val startNumberInput = dialogView.findViewById<EditText>(R.id.startNumberInput)
 
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setView(dialogView)
             .setPositiveButton("Terapkan") { _, _ ->
                 val pattern = patternInput.text.toString().ifBlank { "File_{n}" }
@@ -420,7 +429,7 @@ class MainActivity : AppCompatActivity() {
     private fun confirmDeleteSelected() {
         val selected = adapter.getSelectedFiles()
         if (selected.isEmpty()) return
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle("Hapus ${selected.size} item?")
             .setMessage("Item yang dihapus tidak bisa dikembalikan.")
             .setPositiveButton("Hapus") { _, _ ->
@@ -453,7 +462,7 @@ class MainActivity : AppCompatActivity() {
             passwordInput.visibility = if (checked) View.VISIBLE else View.GONE
         }
 
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setView(dialogView)
             .setPositiveButton(R.string.btn_create_archive) { _, _ ->
                 val name = nameInput.text.toString().trim().ifBlank { defaultName }
@@ -490,7 +499,7 @@ class MainActivity : AppCompatActivity() {
             nameView.text = "Ekstrak: ${archiveFile.name}"
             passwordInput.visibility = if (needsPassword) View.VISIBLE else View.GONE
 
-            AlertDialog.Builder(this)
+            MaterialAlertDialogBuilder(this)
                 .setView(dialogView)
                 .setPositiveButton(R.string.btn_extract) { _, _ ->
                     val destDir = if (destGroup.checkedRadioButtonId == R.id.optExtractHere) {
@@ -538,7 +547,7 @@ class MainActivity : AppCompatActivity() {
         val input = EditText(this)
         input.hint = getString(R.string.hint_password_required)
         input.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle(archiveFile.name)
             .setView(input)
             .setPositiveButton(R.string.btn_extract) { _, _ ->
@@ -572,7 +581,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showExtractSingleEntryDialog(node: ArchiveRepository.ArchiveNode) {
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle(node.name)
             .setMessage(getString(R.string.msg_extracting_to_current_folder))
             .setPositiveButton(R.string.btn_extract_this_item) { _, _ ->
@@ -670,7 +679,7 @@ class MainActivity : AppCompatActivity() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_image_preview, null)
         val imageView = dialogView.findViewById<ImageView>(R.id.imagePreview)
         imageView.setImageURI(Uri.fromFile(file))
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setView(dialogView)
             .setPositiveButton("Tutup", null)
             .show()
@@ -685,7 +694,7 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             contentView.text = "Gagal membaca file: ${e.message}"
         }
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle(file.name)
             .setView(dialogView)
             .setPositiveButton("Tutup", null)
@@ -706,7 +715,7 @@ class MainActivity : AppCompatActivity() {
             val imageView = dialogView.findViewById<ImageView>(R.id.imagePreview)
             imageView.setImageBitmap(bitmap)
 
-            AlertDialog.Builder(this)
+            MaterialAlertDialogBuilder(this)
                 .setTitle("${file.name} (halaman 1 dari ${renderer.pageCount})")
                 .setView(dialogView)
                 .setPositiveButton("Tutup") { _, _ ->
@@ -749,6 +758,7 @@ class MainActivity : AppCompatActivity() {
     // Batch-5: menu toolbar berbeda tergantung mode - listing folder biasa vs browse arsip.
     override fun onPrepareOptionsMenu(menu: Menu): Boolean {
         val browsing = viewModel.isBrowsingArchive
+        menu.findItem(R.id.action_search)?.isVisible = !browsing
         menu.findItem(R.id.action_new_folder)?.isVisible = !browsing
         menu.findItem(R.id.action_folder_size)?.isVisible = !browsing
         menu.findItem(R.id.action_sort)?.isVisible = !browsing
@@ -758,6 +768,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
+            R.id.action_search -> { toggleSearchRow(); true }
             R.id.action_new_folder -> { showNewFolderDialog(); true }
             R.id.action_folder_size -> { showFolderSizeDialog(); true }
             R.id.action_sort -> { toggleSort(); true }
@@ -766,10 +777,30 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Batch-8: search sekarang toggle dari ikon toolbar, bukan kotak yang selalu tampil. */
+    private fun toggleSearchRow() {
+        if (searchRow.visibility == View.VISIBLE) {
+            closeSearchRow()
+        } else {
+            searchRow.visibility = View.VISIBLE
+            searchBox.requestFocus()
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+            imm.showSoftInput(searchBox, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+        }
+    }
+
+    private fun closeSearchRow() {
+        if (searchRow.visibility != View.VISIBLE) return
+        searchBox.text?.clear() // otomatis viewModel.clearSearch() lewat TextWatcher yang sudah ada
+        searchRow.visibility = View.GONE
+        val imm = getSystemService(INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        imm.hideSoftInputFromWindow(searchBox.windowToken, 0)
+    }
+
     private fun showNewFolderDialog() {
         val input = EditText(this)
         input.hint = "Nama folder baru"
-        AlertDialog.Builder(this)
+        MaterialAlertDialogBuilder(this)
             .setTitle("Buat Folder Baru")
             .setView(input)
             .setPositiveButton("Buat") { _, _ ->
@@ -788,7 +819,7 @@ class MainActivity : AppCompatActivity() {
         progressBar.visibility = View.VISIBLE
         viewModel.computeFolderSize { formattedSize, folderName ->
             progressBar.visibility = View.GONE
-            AlertDialog.Builder(this)
+            MaterialAlertDialogBuilder(this)
                 .setTitle("Ukuran Folder")
                 .setMessage("$folderName: $formattedSize")
                 .setPositiveButton("OK", null)

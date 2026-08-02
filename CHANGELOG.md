@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.8-batch8
+Batch-8: Toolbar Ringkas + Dialog Material
+- **Dialog**: semua 11 dialog di app (`AlertDialog.Builder` bawaan Android)
+  diganti ke `MaterialAlertDialogBuilder` - otomatis dapat rounded corner
+  dan tombol bertema warna brand (cyan, dari Batch-7), tanpa perlu ubah
+  logika/isi dialog satupun (pure mechanical swap, API sama persis).
+- **Toolbar lebih ringkas**: search yang sebelumnya kotak permanen di
+  bawah toolbar sekarang jadi ikon di toolbar (toggle buka/tutup), lebih
+  dekat ke gaya toolbar minimal file manager pada umumnya. Buka: tap ikon
+  cari. Tutup: tap ikon lagi, atau tombol back (back tutup search dulu
+  sebelum aksi back lainnya).
+- Ikon search baru `ic_search_toolbar.xml` (varian putih, kontras di
+  toolbar cyan) - `ic_search.xml` asli (abu gelap) tetap dipakai di dalam
+  search row sendiri (background putih), tidak diubah.
+- Search otomatis tertutup saat masuk mode browse arsip (Batch-5, search
+  memang belum didukung di dalam arsip) dan otomatis terbuka lagi kalau
+  ada query tersimpan dari sebelum rotasi layar (konsisten dengan
+  perilaku pasteBar yang sudah ada).
+- Tidak ada perubahan pada logika pencarian itu sendiri (`runSearch`/
+  `clearSearch` di MainViewModel, Batch-2, tidak disentuh).
+
 ## v1.7-batch7
 Batch-7: Palet Warna Asli (dari APK ZArchiver Pro yang diupload user)
 - **Sumber data**: user upload file APK asli ZArchiver Donate. AI membongkar

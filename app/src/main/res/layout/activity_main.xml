@@ -36,13 +36,15 @@
     </HorizontalScrollView>
 
     <LinearLayout
+        android:id="@+id/searchRow"
         android:layout_width="match_parent"
         android:layout_height="48dp"
         android:orientation="horizontal"
         android:background="@color/surface"
         android:paddingStart="12dp"
         android:paddingEnd="12dp"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:visibility="gone">
 
         <ImageView
             android:layout_width="18dp"

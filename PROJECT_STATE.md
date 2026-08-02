@@ -3,11 +3,28 @@
 > Wajib dibaca AI sebelum melanjutkan proyek ini di sesi baru mana pun.
 
 ## Status Terakhir
-- **Versi/Batch selesai:** v1.7-batch7 (Palet Warna Asli dari APK ZArchiver)
+- **Versi/Batch selesai:** v1.8-batch8 (Toolbar Ringkas + Dialog Material)
 - **Package:** `com.mahasiswa.filemanager`
 - File ini pertama dibuat retroaktif di sesi sebelumnya (disusun ulang dari
   CHANGELOG.md v1.0 s/d v1.4-batch4). Mulai v1.5-batch5, riwayat ditulis
   live per batch.
+
+## Riwayat Kronologis (dari CHANGELOG.md, jangan dihapus)
+- **v1.8-batch8** — Toolbar Ringkas + Dialog Material: 11 dialog di app
+  pindah dari `AlertDialog.Builder` ke `MaterialAlertDialogBuilder`
+  (rounded corner + tombol tema cyan, otomatis dari `Theme.MaterialComponents`
+  yang sudah dipakai, tanpa style XML tambahan). Search box permanen jadi
+  ikon toggle di toolbar (`searchRow` id baru, default `gone`), ikon putih
+  baru `ic_search_toolbar.xml` untuk kontras di toolbar cyan. Back menutup
+  search dulu sebelum aksi back lain. Search otomatis tertutup saat masuk
+  mode browse arsip, otomatis terbuka lagi kalau ada query tersisa dari
+  sebelum rotasi. Logika search (`runSearch`/`clearSearch`, Batch-2) tidak
+  disentuh.
+- **v1.7-batch7** — Palet Warna Asli: primary/toolbar jadi cyan #00B2D9
+  (dari ikon launcher APK asli), accent/folder jadi amber #D97800, 7 warna
+  ikon per tipe file baru di colors.xml, semua drawable ikon direcolor
+  (bentuk/path tidak diubah). Sumber: sampling piksel Pillow dari APK yang
+  diupload user, bukan tebakan/ingatan umum lagi.
 
 ## AI Assumption Log (wajib, sesuai aturan kerja)
 - **[v1.6-batch6]** Warna belum disentuh saat itu karena belum ada
@@ -23,12 +40,6 @@
   diambil dari APK, bukan artwork) - keputusan sengaja untuk menghindari
   pelanggaran hak cipta aset visual pihak lain.
 
-## Riwayat Kronologis (dari CHANGELOG.md, jangan dihapus)
-- **v1.7-batch7** — Palet Warna Asli: primary/toolbar jadi cyan #00B2D9
-  (dari ikon launcher APK asli), accent/folder jadi amber #D97800, 7 warna
-  ikon per tipe file baru di colors.xml, semua drawable ikon direcolor
-  (bentuk/path tidak diubah). Sumber: sampling piksel Pillow dari APK yang
-  diupload user, bukan tebakan/ingatan umum lagi.
 - **v1.6-batch6** — Redesign List File Utama (tahap 1 dari cakupan "identik
   ZArchiver Pro"): row lebih dense (padding 10dp→8dp, minHeight 56dp),
   garis pemisah tipis antar row (`DividerItemDecoration` + drawable baru)

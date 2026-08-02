@@ -11,8 +11,8 @@ android {
         applicationId "com.mahasiswa.filemanager"
         minSdk 26
         targetSdk 34
-        versionCode 9
-        versionName "1.7-batch7"
+        versionCode 10
+        versionName "1.8-batch8"
     }
 
     signingConfigs {

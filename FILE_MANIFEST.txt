@@ -27,6 +27,7 @@ app/src/main/res/drawable/ic_image.xml
 app/src/main/res/drawable/ic_launcher_foreground.xml
 app/src/main/res/drawable/ic_pdf.xml
 app/src/main/res/drawable/ic_search.xml
+app/src/main/res/drawable/ic_search_toolbar.xml
 app/src/main/res/drawable/ic_video.xml
 app/src/main/res/layout/activity_main.xml
 app/src/main/res/layout/dialog_create_archive.xml
