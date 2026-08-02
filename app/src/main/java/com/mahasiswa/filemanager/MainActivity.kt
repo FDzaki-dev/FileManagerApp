@@ -23,12 +23,8 @@ import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.core.content.FileProvider
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
@@ -279,13 +275,9 @@ class MainActivity : AppCompatActivity() {
                 val pattern = patternInput.text.toString().ifBlank { "File_{n}" }
                 val start = startNumberInput.text.toString().toIntOrNull() ?: 1
                 progressBar.visibility = View.VISIBLE
-                lifecycleScope.launch {
-                    val successCount = withContext(Dispatchers.IO) {
-                        FileOperations.batchRename(selected, pattern, start).count { it.second }
-                    }
+                viewModel.renameSelected(selected, pattern, start) { successCount, total ->
                     progressBar.visibility = View.GONE
-                    Toast.makeText(this@MainActivity, "$successCount/${selected.size} file berhasil di-rename", Toast.LENGTH_SHORT).show()
-                    viewModel.reloadCurrentDirectory()
+                    Toast.makeText(this, "$successCount/$total file berhasil di-rename", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Batal", null)
@@ -300,13 +292,9 @@ class MainActivity : AppCompatActivity() {
             .setMessage("Item yang dihapus tidak bisa dikembalikan.")
             .setPositiveButton("Hapus") { _, _ ->
                 progressBar.visibility = View.VISIBLE
-                lifecycleScope.launch {
-                    val successCount = withContext(Dispatchers.IO) {
-                        selected.count { FileOperations.deleteRecursively(it) }
-                    }
+                viewModel.deleteSelected(selected) { successCount, total ->
                     progressBar.visibility = View.GONE
-                    Toast.makeText(this@MainActivity, "$successCount/${selected.size} item dihapus", Toast.LENGTH_SHORT).show()
-                    viewModel.reloadCurrentDirectory()
+                    Toast.makeText(this, "$successCount/$total item dihapus", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("Batal", null)
@@ -316,20 +304,14 @@ class MainActivity : AppCompatActivity() {
     private fun zipSelected() {
         val selected = adapter.getSelectedFiles()
         if (selected.isEmpty()) return
-        val zipName = "Archive_${System.currentTimeMillis()}.zip"
-        val destZip = File(viewModel.currentDir, zipName)
         progressBar.visibility = View.VISIBLE
-        lifecycleScope.launch {
-            val success = withContext(Dispatchers.IO) {
-                FileOperations.zipFiles(selected, destZip)
-            }
+        viewModel.zipSelected(selected) { success, zipName ->
             progressBar.visibility = View.GONE
             Toast.makeText(
-                this@MainActivity,
+                this,
                 if (success) "Berhasil membuat $zipName" else "Gagal membuat ZIP",
                 Toast.LENGTH_SHORT
             ).show()
-            viewModel.reloadCurrentDirectory()
         }
     }
 
@@ -355,27 +337,13 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun pasteHere() {
-        val filesToProcess = viewModel.clipboardFiles
-        if (filesToProcess.isEmpty()) return
-        val targetDir = viewModel.currentDir
-        val isCut = viewModel.clipboardIsCut
         progressBar.visibility = View.VISIBLE
-        lifecycleScope.launch {
-            val successCount = withContext(Dispatchers.IO) {
-                var count = 0
-                filesToProcess.forEach { file ->
-                    val ok = if (isCut) FileOperations.moveFile(file, targetDir)
-                             else FileOperations.copyRecursively(file, targetDir)
-                    if (ok) count++
-                }
-                count
-            }
+        val started = viewModel.pasteClipboard { successCount, total ->
             progressBar.visibility = View.GONE
             pasteBar.visibility = View.GONE
-            viewModel.clearClipboard()
-            Toast.makeText(this@MainActivity, "$successCount/${filesToProcess.size} item berhasil ditempel", Toast.LENGTH_SHORT).show()
-            viewModel.reloadCurrentDirectory()
+            Toast.makeText(this, "$successCount/$total item berhasil ditempel", Toast.LENGTH_SHORT).show()
         }
+        if (!started) progressBar.visibility = View.GONE // clipboard ternyata kosong
     }
 
     // ---------------------------------------------------------------------
@@ -488,9 +456,9 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("Buat") { _, _ ->
                 val name = input.text.toString().trim()
                 if (name.isNotEmpty()) {
-                    val newFolder = File(viewModel.currentDir, name)
-                    if (newFolder.mkdirs()) viewModel.reloadCurrentDirectory()
-                    else Toast.makeText(this, "Gagal membuat folder", Toast.LENGTH_SHORT).show()
+                    viewModel.createFolder(name) { success ->
+                        if (!success) Toast.makeText(this, "Gagal membuat folder", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
             .setNegativeButton("Batal", null)
@@ -499,13 +467,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun showFolderSizeDialog() {
         progressBar.visibility = View.VISIBLE
-        val target = viewModel.currentDir
-        lifecycleScope.launch {
-            val size = withContext(Dispatchers.IO) { FileOperations.folderSize(target) }
+        viewModel.computeFolderSize { formattedSize, folderName ->
             progressBar.visibility = View.GONE
-            AlertDialog.Builder(this@MainActivity)
+            AlertDialog.Builder(this)
                 .setTitle("Ukuran Folder")
-                .setMessage("${target.name}: ${FileOperations.formatSize(size)}")
+                .setMessage("$folderName: $formattedSize")
                 .setPositiveButton("OK", null)
                 .show()
         }

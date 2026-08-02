@@ -6,19 +6,17 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import java.io.File
 
 /**
  * ==========================================================================
- *  MAIN VIEWMODEL - STATE PERSISTENCE (Batch-2)
+ *  MAIN VIEWMODEL - STATE PERSISTENCE (Batch-2) + REPOSITORY (Batch-3)
  * ==========================================================================
- *  Tujuan batch ini: state navigasi & preferensi user bertahan saat:
+ *  Batch-2: state navigasi & preferensi user bertahan saat:
  *   - Rotasi layar (configuration change) -> ViewModel instance dipertahankan
  *     otomatis oleh Android, jadi tidak perlu SavedStateHandle sama sekali.
  *   - Activity dimatikan sistem di background lalu dipulihkan (process death)
@@ -26,6 +24,13 @@ import java.io.File
  *     memulihkan nilai primitif (path folder, mode sort, query search,
  *     isi clipboard) sehingga user tidak kembali ke folder root / kehilangan
  *     clipboard begitu saja.
+ *
+ *  Batch-3: seluruh akses disk (listing, search, rename, delete, copy/move,
+ *  zip, ukuran folder, buat folder) TIDAK lagi ditulis inline atau memanggil
+ *  FileOperations langsung dari sini/Activity - semua lewat FileRepository.
+ *  ViewModel ini sekarang murni "penghubung" antara UI dan repository, tidak
+ *  ada satu pun `java.io.File` I/O mentah yang dieksekusi langsung di kelas
+ *  ini (kecuali FileEntry.file yang cuma referensi objek/path, bukan I/O).
  *
  *  Yang SENGAJA TIDAK disimpan di SavedStateHandle: daftar entry hasil
  *  listing (currentEntries/entries LiveData). Alasan: bisa besar & berubah-
@@ -35,6 +40,8 @@ import java.io.File
  * ==========================================================================
  */
 class MainViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel() {
+
+    private val repository = FileRepository()
 
     companion object {
         private const val KEY_CURRENT_DIR = "key_current_dir"
@@ -129,14 +136,7 @@ class MainViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel(
         dirLoadJob?.cancel()
         _isLoading.value = true
         dirLoadJob = viewModelScope.launch {
-            val list = withContext(Dispatchers.IO) {
-                val files = dir.listFiles()?.toList() ?: emptyList()
-                files.map { FileEntry(it) }.sortedWith(
-                    compareByDescending<FileEntry> { it.isDirectory }
-                        .thenBy { if (sortByDateDesc) 0 else it.name.lowercase() }
-                        .thenByDescending { if (sortByDateDesc) it.file.lastModified() else 0 }
-                )
-            }
+            val list = repository.listDirectory(dir, sortByDateDesc)
             if (!isActive) return@launch
             _isLoading.value = false
             lastDirEntries = list
@@ -158,11 +158,7 @@ class MainViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel(
             delay(300) // debounce - sama seperti Batch-1
             if (!isActive) return@launch
             _isLoading.value = true
-            val results = withContext(Dispatchers.IO) {
-                val found = mutableListOf<File>()
-                FileOperations.searchRecursively(currentDir, query, found)
-                found.map { FileEntry(it) }
-            }
+            val results = repository.search(currentDir, query)
             if (!isActive) return@launch
             _isLoading.value = false
             _entries.value = results
@@ -182,5 +178,69 @@ class MainViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel(
         sortByDateDesc = !sortByDateDesc
         reloadCurrentDirectory()
         return sortByDateDesc
+    }
+
+    // -----------------------------------------------------------------
+    // Aksi file (Batch-3): semuanya lewat FileRepository, lalu reload
+    // listing folder aktif. Activity hanya perlu tahu HASIL (lewat
+    // callback onResult) untuk urusan UI (Toast/dialog), tidak lagi
+    // menyentuh File I/O sama sekali.
+    // -----------------------------------------------------------------
+
+    fun renameSelected(files: List<File>, pattern: String, startNumber: Int, onResult: (successCount: Int, total: Int) -> Unit) {
+        viewModelScope.launch {
+            val count = repository.batchRename(files, pattern, startNumber)
+            onResult(count, files.size)
+            reloadCurrentDirectory()
+        }
+    }
+
+    fun deleteSelected(files: List<File>, onResult: (successCount: Int, total: Int) -> Unit) {
+        viewModelScope.launch {
+            val count = repository.deleteFiles(files)
+            onResult(count, files.size)
+            reloadCurrentDirectory()
+        }
+    }
+
+    fun zipSelected(files: List<File>, onResult: (success: Boolean, zipName: String) -> Unit) {
+        val zipName = "Archive_${System.currentTimeMillis()}.zip"
+        val destZip = File(currentDir, zipName)
+        viewModelScope.launch {
+            val success = repository.zipFiles(files, destZip)
+            onResult(success, zipName)
+            reloadCurrentDirectory()
+        }
+    }
+
+    /** @return false kalau clipboard sedang kosong (tidak ada yang dieksekusi) */
+    fun pasteClipboard(onResult: (successCount: Int, total: Int) -> Unit): Boolean {
+        val files = clipboardFiles
+        if (files.isEmpty()) return false
+        val targetDir = currentDir
+        val isCut = clipboardIsCut
+        viewModelScope.launch {
+            val count = repository.copyOrMoveFiles(files, targetDir, isCut)
+            clearClipboard()
+            onResult(count, files.size)
+            reloadCurrentDirectory()
+        }
+        return true
+    }
+
+    fun createFolder(name: String, onResult: (success: Boolean) -> Unit) {
+        viewModelScope.launch {
+            val success = repository.createFolder(currentDir, name)
+            onResult(success)
+            if (success) reloadCurrentDirectory()
+        }
+    }
+
+    fun computeFolderSize(onResult: (formattedSize: String, folderName: String) -> Unit) {
+        val target = currentDir
+        viewModelScope.launch {
+            val size = repository.folderSize(target)
+            onResult(repository.formatSize(size), target.name)
+        }
     }
 }

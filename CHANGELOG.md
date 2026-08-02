@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.3-batch3
+Batch-3: Repository Pattern
+- Tambah `FileRepository` sebagai satu-satunya lapisan yang menyentuh disk/File
+  API (listing folder, search, rename batch, hapus, copy/move, zip, ukuran
+  folder, buat folder).
+- `MainActivity` tidak lagi memanggil `FileOperations` atau File I/O mentah
+  sama sekali - semua aksi (rename, delete, zip, paste, buat folder, ukuran
+  folder) sekarang lewat fungsi baru di `MainViewModel` yang meneruskan ke
+  `FileRepository`, lalu melapor hasilnya ke Activity lewat callback untuk
+  ditampilkan sebagai Toast/dialog.
+- `MainViewModel` juga tidak lagi menulis logika listing+sort secara inline;
+  semua lewat `repository.listDirectory()` / `repository.search()`.
+- Efeknya murni arsitektural (Separation of Concerns) - tidak ada perubahan
+  perilaku yang terlihat user, semua fitur dari v1.2-batch2 dipertahankan
+  identik: state persistence saat rotasi/process death, listing, sort,
+  search, preview, rename batch, copy/move/delete/zip, ukuran folder, buat
+  folder.
+- Logika inti `FileOperations` (Batch-1) tidak diubah sama sekali, hanya
+  dibungkus oleh Repository.
+
 ## v1.2-batch2
 Batch-2: State Persistence (ViewModel + SavedStateHandle)
 - Seluruh state navigasi (folder aktif, breadcrumb, mode sort, query search,
