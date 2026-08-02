@@ -1,0 +1,29 @@
+<resources>
+    <string name="app_name">File Manager</string>
+    <string name="action_rename_batch">Rename Batch</string>
+    <string name="action_delete">Hapus</string>
+    <string name="action_copy">Salin</string>
+    <string name="action_move">Pindah</string>
+    <string name="action_zip">Kompres ZIP</string>
+    <string name="action_folder_size">Ukuran Folder</string>
+    <string name="hint_search">Cari file di folder ini…</string>
+    <string name="permission_needed">Aplikasi butuh izin akses semua file untuk berfungsi</string>
+    <string name="grant_permission">Berikan Izin</string>
+
+    <!-- Batch-4: Archive Engine -->
+    <string name="dialog_create_archive_title">Buat Arsip</string>
+    <string name="hint_archive_name">Nama arsip</string>
+    <string name="label_use_password">Gunakan Password</string>
+    <string name="hint_password">Password</string>
+    <string name="label_compression_level">Level Kompresi</string>
+    <string name="level_simpan">Simpan (Tanpa Kompresi)</string>
+    <string name="level_cepat">Cepat</string>
+    <string name="level_normal">Normal</string>
+    <string name="level_maksimal">Maksimal</string>
+    <string name="btn_create_archive">Buat</string>
+    <string name="dialog_extract_title">Ekstrak Arsip</string>
+    <string name="label_extract_new_folder">Ekstrak ke folder baru</string>
+    <string name="label_extract_here">Ekstrak ke folder ini</string>
+    <string name="btn_extract">Ekstrak</string>
+    <string name="hint_password_required">Arsip ini terkunci, masukkan password</string>
+</resources>

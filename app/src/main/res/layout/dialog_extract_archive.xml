@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/extractArchiveName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/dialog_extract_title"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="@color/text_primary" />
+
+    <RadioGroup
+        android:id="@+id/extractDestGroup"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp">
+
+        <RadioButton
+            android:id="@+id/optExtractNewFolder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:checked="true"
+            android:text="@string/label_extract_new_folder" />
+
+        <RadioButton
+            android:id="@+id/optExtractHere"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/label_extract_here" />
+    </RadioGroup>
+
+    <EditText
+        android:id="@+id/extractPasswordInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:hint="@string/hint_password_required"
+        android:inputType="textPassword"
+        android:visibility="gone" />
+
+</LinearLayout>
