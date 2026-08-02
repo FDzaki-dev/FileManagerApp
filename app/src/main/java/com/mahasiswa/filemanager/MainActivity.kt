@@ -62,6 +62,10 @@ class MainActivity : AppCompatActivity() {
     // saat masuk/keluar arsip. `adapter` (disk) di atas tidak disentuh sama sekali.
     private lateinit var archiveAdapter: ArchiveEntryAdapter
 
+    // Batch-5.1: dipakai saat app dibuka lewat "Buka dengan" dari app lain (ACTION_VIEW).
+    private var pendingViewIntent: Intent? = null
+    private var pendingIntentFile: File? = null
+
     // Batch-2: seluruh state navigasi (folder aktif, sort, query search,
     // clipboard) sekarang dipegang MainViewModel + SavedStateHandle supaya
     // bertahan saat rotasi layar maupun process death. Activity hanya
@@ -87,7 +91,16 @@ class MainActivity : AppCompatActivity() {
         setupPasteBar()
         observeViewModel()
         restorePasteBarIfNeeded()
+        pendingViewIntent = intent // Batch-5.1: tangkap kalau dibuka lewat "Buka dengan"
         checkPermissionAndLoad()
+    }
+
+    /** Batch-5.1: dipanggil saat app SUDAH berjalan (singleTop) lalu dibuka lagi lewat "Buka dengan". */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        pendingViewIntent = intent
+        if (hasStoragePermission()) processPendingViewIntent()
     }
 
     // ---------------------------------------------------------------------
@@ -96,6 +109,17 @@ class MainActivity : AppCompatActivity() {
     private fun observeViewModel() {
         viewModel.entries.observe(this) { entries ->
             adapter.updateData(entries)
+            // Batch-5.1: kalau ada file target dari intent "Buka dengan" (ACTION_VIEW) yang
+            // menunggu, dan folder yang baru dimuat ini isinya sudah mengandung file itu,
+            // buka otomatis - reuse onEntryClick() yang sudah ada (preview/browse-arsip
+            // sesuai tipe file), tidak ada logika baru yang duplikat.
+            pendingIntentFile?.let { pending ->
+                val match = entries.find { it.file.absolutePath == pending.absolutePath }
+                if (match != null) {
+                    pendingIntentFile = null
+                    onEntryClick(match)
+                }
+            }
         }
         viewModel.isLoading.observe(this) { loading ->
             progressBar.visibility = if (loading) View.VISIBLE else View.GONE
@@ -175,9 +199,66 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkPermissionAndLoad() {
         if (hasStoragePermission()) {
-            viewModel.ensureLoaded()
+            // Batch-5.1: kalau app dibuka lewat "Buka dengan" (ACTION_VIEW), proses itu dulu;
+            // kalau tidak, perilaku persis seperti sebelumnya (ensureLoaded ke root/last dir).
+            val incoming = pendingViewIntent
+            if (incoming != null && incoming.action == Intent.ACTION_VIEW && incoming.data != null) {
+                processPendingViewIntent()
+            } else {
+                viewModel.ensureLoaded()
+            }
         } else {
             requestStoragePermission()
+        }
+    }
+
+    /** Batch-5.1: resolve URI dari intent "Buka dengan" jadi java.io.File asli, lalu muat foldernya. */
+    private fun processPendingViewIntent() {
+        val incoming = pendingViewIntent
+        pendingViewIntent = null
+        val uri = incoming?.data
+        if (incoming?.action != Intent.ACTION_VIEW || uri == null) {
+            viewModel.ensureLoaded()
+            return
+        }
+        val file = resolveFileFromViewUri(uri)
+        val parent = file?.parentFile
+        if (file == null || !file.exists() || parent == null) {
+            Toast.makeText(
+                this,
+                "Tidak bisa membuka file ini langsung dari sumbernya, cari manual lewat File Manager",
+                Toast.LENGTH_LONG
+            ).show()
+            viewModel.ensureLoaded()
+            return
+        }
+        pendingIntentFile = file
+        viewModel.loadDirectory(parent)
+    }
+
+    /**
+     * Resolve URI dari ACTION_VIEW jadi path fisik. Best-effort: scheme "file" langsung dari
+     * path URI; scheme "content" dicoba lewat kolom DATA (didukung banyak provider bawaan
+     * Android/file manager lain untuk file lokal, walau kolom ini sudah deprecated di API
+     * modern). Kalau provider tidak mengekspos path fisik sama sekali, return null dan
+     * caller menampilkan pesan graceful (bukan crash).
+     */
+    private fun resolveFileFromViewUri(uri: Uri): File? {
+        return when (uri.scheme) {
+            "file" -> uri.path?.let { File(it) }
+            "content" -> try {
+                contentResolver.query(
+                    uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null
+                )?.use { cursor ->
+                    val idx = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DATA)
+                    if (idx != -1 && cursor.moveToFirst()) {
+                        cursor.getString(idx)?.let { File(it) }
+                    } else null
+                }
+            } catch (e: Exception) {
+                null
+            }
+            else -> null
         }
     }
 

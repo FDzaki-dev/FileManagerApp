@@ -3,13 +3,21 @@
 > Wajib dibaca AI sebelum melanjutkan proyek ini di sesi baru mana pun.
 
 ## Status Terakhir
-- **Versi/Batch selesai:** v1.5-batch5 (Browse Isi Arsip Tanpa Ekstrak)
+- **Versi/Batch selesai:** v1.5.1-batch5.1 (Suggested App / ACTION_VIEW)
 - **Package:** `com.mahasiswa.filemanager`
 - File ini pertama dibuat retroaktif di sesi sebelumnya (disusun ulang dari
   CHANGELOG.md v1.0 s/d v1.4-batch4). Mulai v1.5-batch5, riwayat ditulis
   live per batch.
 
 ## Riwayat Kronologis (dari CHANGELOG.md, jangan dihapus)
+- **v1.5.1-batch5.1** — Suggested App: `AndroidManifest.xml` dapat 3
+  intent-filter `ACTION_VIEW` baru (arsip zip, teks/dokumen, media) supaya
+  app muncul di dialog "Buka dengan" sistem saat user tap file dari app
+  lain. Intent masuk di-resolve jadi `File` asli lalu dibuka otomatis lewat
+  `onEntryClick()` yang sudah ada. Resolusi `content://` best-effort lewat
+  kolom `MediaStore.MediaColumns.DATA` - didokumentasikan sebagai batasan
+  yang disadari (bukan bug) kalau provider pihak ketiga tidak mengekspos
+  path fisik. Tidak ada perubahan pada alur buka-dari-launcher.
 - **v1.5-batch5** — Browse Isi Arsip Tanpa Ekstrak: tap file `.zip` sekarang
   membuka isi arsip sebagai folder virtual (browse), bukan langsung dialog
   ekstrak. Breadcrumb & navigasi back khusus mode arsip. Tap file di dalam

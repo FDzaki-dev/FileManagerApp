@@ -1,5 +1,32 @@
 # Changelog
 
+## v1.5.1-batch5.1
+Batch-5.1: Muncul di "Buka dengan" (Suggested App) untuk ZIP & berkas mainstream
+- `AndroidManifest.xml`: tambah 3 intent-filter `ACTION_VIEW` di `MainActivity`
+  supaya app terdaftar sebagai pilihan di dialog "Buka dengan" sistem Android
+  saat user tap file dari app lain (file manager lain, browser, dll):
+  1. Arsip: `application/zip`, `application/x-zip-compressed`,
+     `application/octet-stream` (banyak downloader kasih mimeType generik
+     untuk zip, jadi octet-stream disertakan supaya tetap kedeteksi).
+  2. Teks/dokumen: `text/plain`, `text/xml`, `application/xml`,
+     `application/json`, `application/pdf`.
+  3. Media: `image/*`, `video/*`, `audio/*`.
+- App sekarang benar-benar MEMBUKA file yang di-tap (bukan cuma terdaftar
+  lalu tampil folder kosong): intent `ACTION_VIEW` masuk di-resolve jadi
+  `java.io.File` asli (scheme `file` langsung, scheme `content` best-effort
+  lewat kolom `MediaStore.MediaColumns.DATA`), folder induknya dimuat, lalu
+  file tersebut otomatis di-"klik" via `onEntryClick()` yang sudah ada
+  (preview biasa untuk gambar/teks/PDF, browse mode Batch-5 untuk zip) -
+  tidak ada logika buka-file baru yang duplikat.
+- **Batasan yang disadari & didokumentasikan (bukan bug)**: resolusi
+  `content://` lewat kolom DATA tidak dijamin berhasil di semua provider
+  (kolom ini sudah deprecated di API modern, beberapa provider pihak
+  ketiga tidak mengekspos path fisik sama sekali). Kalau gagal resolve,
+  app menampilkan pesan graceful ("cari manual lewat File Manager") -
+  tidak crash, cuma tidak auto-buka.
+- Perilaku buka app dari launcher (ikon di home screen) 100% tidak
+  berubah - hanya jalur baru (dibuka dari app lain) yang ditambah.
+
 ## v1.5-batch5
 Batch-5: Browse Isi Arsip Tanpa Ekstrak (virtual folder ala ZArchiver)
 - **Perubahan perilaku yang disengaja**: tap file `.zip` sekarang membuka
