@@ -1,5 +1,30 @@
 # Changelog
 
+## v1.7-batch7
+Batch-7: Palet Warna Asli (dari APK ZArchiver Pro yang diupload user)
+- **Sumber data**: user upload file APK asli ZArchiver Donate. AI membongkar
+  APK (unzip, murni membaca resource - TIDAK menjalankan/mendekompilasi
+  kode program apapun) dan melakukan sampling piksel langsung dari
+  `mipmap/ic_launcher.png` dan `drawable-nodpi/fs_*.png` pakai Pillow.
+  Ini data warna AKURAT, bukan tebakan seperti Batch-6.
+- `colors.xml`: `primary` #1F6F54→**#00B2D9** (cyan, warna brand asli dari
+  ikon launcher), `primary_dark` →**#00829F**, `accent`/folder
+  →**#D97800** (amber, konsisten di semua varian folder yang disample).
+- Warna ikon per tipe file baru (`icon_folder`, `icon_pdf`, `icon_audio`,
+  `icon_image`, `icon_video`, `icon_archive`, `icon_file`), masing-masing
+  dicocokkan ke hasil sampling: PDF merah #9C0F0F, audio hijau #0E650E,
+  gambar biru #347ADB, video abu netral (ikon asli tidak berwarna
+  mencolok), arsip abu-kebiruan (ikon asli ZArchiver untuk arsip ternyata
+  netral, BUKAN oranye seperti asumsi Batch-4/desain awal kita).
+- **Batas yang disadari & disengaja**: bentuk/path vector ikon (`ic_folder.
+  xml` dkk.) TETAP desain original proyek ini, TIDAK menjiplak
+  path/artwork dari PNG asli ZArchiver - itu akan jadi pelanggaran hak
+  cipta aset. Yang diambil HANYA nilai warna (fakta/data, bukan karya
+  cipta). Ikon launcher aplikasi ini (mipmap/ic_launcher project sendiri)
+  JUGA tidak diganti dengan punya ZArchiver - itu identitas brand/logo
+  mereka, di luar cakupan "warna UI" yang wajar untuk direplikasi.
+- Tidak ada perubahan logika/fungsi - murni warna.
+
 ## v1.6-batch6
 Batch-6: Redesign List File Utama — tahap 1 dari cakupan "identik ZArchiver Pro"
 - **Catatan jujur soal cakupan**: batch ini HANYA elemen struktural yang bisa

@@ -1,10 +1,21 @@
 <resources>
-    <color name="primary">#1F6F54</color>
-    <color name="primary_dark">#154D3A</color>
-    <color name="accent">#F2A93B</color>
+    <!-- Batch-7: hasil sampling piksel langsung dari APK ZArchiver Pro yang diupload
+         user (mipmap ic_launcher.png & drawable-nodpi fs_*.png), BUKAN tebakan. -->
+    <color name="primary">#00B2D9</color>
+    <color name="primary_dark">#00829F</color>
+    <color name="accent">#D97800</color>
     <color name="background">#F7F7F5</color>
     <color name="surface">#FFFFFF</color>
     <color name="text_primary">#1B1B1B</color>
     <color name="text_secondary">#6B6B6B</color>
     <color name="divider">#E4E4E1</color>
+
+    <!-- Batch-7: warna ikon per tipe file, hasil sampling piksel fs_*.png asli -->
+    <color name="icon_folder">#D97800</color>
+    <color name="icon_pdf">#9C0F0F</color>
+    <color name="icon_audio">#0E650E</color>
+    <color name="icon_image">#347ADB</color>
+    <color name="icon_video">#4A4A4A</color>
+    <color name="icon_archive">#8B95A8</color>
+    <color name="icon_file">#8A8A8A</color>
 </resources>
