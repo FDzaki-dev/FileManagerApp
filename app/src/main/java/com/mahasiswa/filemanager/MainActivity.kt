@@ -58,6 +58,10 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var adapter: FileAdapter
 
+    // Batch-5: adapter TERPISAH untuk mode browse arsip, di-swap ke recyclerView
+    // saat masuk/keluar arsip. `adapter` (disk) di atas tidak disentuh sama sekali.
+    private lateinit var archiveAdapter: ArchiveEntryAdapter
+
     // Batch-2: seluruh state navigasi (folder aktif, sort, query search,
     // clipboard) sekarang dipegang MainViewModel + SavedStateHandle supaya
     // bertahan saat rotasi layar maupun process death. Activity hanya
@@ -97,11 +101,40 @@ class MainActivity : AppCompatActivity() {
             progressBar.visibility = if (loading) View.VISIBLE else View.GONE
         }
         viewModel.currentDirPath.observe(this) { path ->
-            breadcrumb.text = path
+            // Batch-5: breadcrumb folder biasa cuma relevan kalau sedang TIDAK browsing
+            // arsip (saat browsing arsip, breadcrumb diisi updateBreadcrumbForArchive()).
+            if (!viewModel.isBrowsingArchive) breadcrumb.text = path
             // Selection mode selalu berakhir tiap kali pindah folder (perilaku sama seperti sebelumnya)
             adapter.clearSelection()
             updateSelectionBarVisibility()
         }
+
+        // -------------------------------------------------------------
+        // Batch-5: Browse Arsip Tanpa Ekstrak
+        // -------------------------------------------------------------
+        viewModel.archiveBrowseState.observe(this) { state ->
+            val browsing = state != null
+            if (browsing && recyclerView.adapter !== archiveAdapter) {
+                recyclerView.adapter = archiveAdapter
+            } else if (!browsing && recyclerView.adapter !== adapter) {
+                recyclerView.adapter = adapter
+                breadcrumb.text = viewModel.currentDirPath.value
+            }
+            // Search & selection tidak relevan saat browsing isi arsip di batch ini.
+            searchBox.isEnabled = !browsing
+            selectionBar.visibility = if (browsing) View.GONE else selectionBar.visibility
+            if (state != null) updateBreadcrumbForArchive(state)
+            invalidateOptionsMenu()
+        }
+        viewModel.archiveEntries.observe(this) { nodes ->
+            archiveAdapter.updateData(nodes)
+        }
+    }
+
+    /** Batch-5: breadcrumb khusus mode arsip, format: .../nama_arsip.zip/folder/sub */
+    private fun updateBreadcrumbForArchive(state: MainViewModel.ArchiveBrowseState) {
+        val base = "${state.archiveFile.parentFile?.absolutePath ?: ""}/${state.archiveFile.name}"
+        breadcrumb.text = if (state.internalPath.isEmpty()) base else "$base/${state.internalPath.trimEnd('/')}"
     }
 
     /** Kalau clipboard masih terisi dari sebelum rotasi/process death, tampilkan lagi paste bar-nya. */
@@ -175,6 +208,12 @@ class MainActivity : AppCompatActivity() {
             onClick = { entry -> onEntryClick(entry) },
             onLongClick = { entry -> onEntryLongClick(entry) }
         )
+        // Batch-5: adapter kedua khusus browse arsip - dibuat di sini juga,
+        // tapi baru dipasang ke recyclerView.adapter saat masuk mode arsip.
+        archiveAdapter = ArchiveEntryAdapter(
+            items = emptyList(),
+            onClick = { node -> onArchiveNodeClick(node) }
+        )
         recyclerView.layoutManager = LinearLayoutManager(this)
         recyclerView.adapter = adapter
     }
@@ -209,6 +248,14 @@ class MainActivity : AppCompatActivity() {
 
     /** Dipakai baik oleh tombol back fisik maupun tombol back di toolbar. */
     private fun handleBackAction() {
+        // Batch-5: kalau sedang browsing arsip, back naik satu level virtual dulu;
+        // baru kalau sudah di akar arsip, back berikutnya keluar ke listing folder biasa.
+        if (viewModel.isBrowsingArchive) {
+            if (!viewModel.goUpInsideArchive()) {
+                viewModel.closeArchiveBrowse()
+            }
+            return
+        }
         if (adapter.selectionMode) {
             adapter.clearSelection()
             updateSelectionBarVisibility()
@@ -384,6 +431,97 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------------------------------------------------------------------
+    // 5b. BROWSE ARSIP TANPA EKSTRAK (Batch-5)
+    // ---------------------------------------------------------------------
+    // Dipicu dari previewFile() saat user tap file .zip. Sebelumnya (Batch-4)
+    // tap .zip langsung membuka dialog ekstrak; sekarang tap .zip membuka
+    // arsip sebagai folder virtual dulu (ala ZArchiver) - dialog ekstrak
+    // (semua atau per-item) tetap ada, dipindah jadi aksi DI DALAM mode browse.
+
+    private fun enterArchiveMode(archiveFile: File) {
+        viewModel.checkArchivePassword(archiveFile) { needsPassword ->
+            if (needsPassword) {
+                promptArchivePasswordAndOpen(archiveFile)
+            } else {
+                openArchiveOrShowError(archiveFile, password = null)
+            }
+        }
+    }
+
+    private fun promptArchivePasswordAndOpen(archiveFile: File) {
+        val input = EditText(this)
+        input.hint = getString(R.string.hint_password_required)
+        input.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        AlertDialog.Builder(this)
+            .setTitle(archiveFile.name)
+            .setView(input)
+            .setPositiveButton(R.string.btn_extract) { _, _ ->
+                openArchiveOrShowError(archiveFile, password = input.text.toString())
+            }
+            .setNegativeButton("Batal", null)
+            .show()
+    }
+
+    private fun openArchiveOrShowError(archiveFile: File, password: String?) {
+        progressBar.visibility = View.VISIBLE
+        viewModel.openArchiveBrowse(archiveFile, password) { status ->
+            progressBar.visibility = View.GONE
+            when (status) {
+                ArchiveRepository.ArchiveListStatus.SUCCESS -> Unit // observer archiveBrowseState yang urus tampilan
+                ArchiveRepository.ArchiveListStatus.NEEDS_PASSWORD -> promptArchivePasswordAndOpen(archiveFile)
+                ArchiveRepository.ArchiveListStatus.FAILED -> Toast.makeText(
+                    this, "Password salah atau arsip gagal dibaca", Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
+    }
+
+    /** Tap folder virtual -> masuk; tap file di dalam arsip -> tawarkan ekstrak item ini. */
+    private fun onArchiveNodeClick(node: ArchiveRepository.ArchiveNode) {
+        if (node.isDirectory) {
+            viewModel.navigateIntoArchiveFolder(node)
+        } else {
+            showExtractSingleEntryDialog(node)
+        }
+    }
+
+    private fun showExtractSingleEntryDialog(node: ArchiveRepository.ArchiveNode) {
+        AlertDialog.Builder(this)
+            .setTitle(node.name)
+            .setMessage(getString(R.string.msg_extracting_to_current_folder))
+            .setPositiveButton(R.string.btn_extract_this_item) { _, _ ->
+                progressBar.visibility = View.VISIBLE
+                viewModel.extractArchiveEntry(node, viewModel.currentDir) { status ->
+                    progressBar.visibility = View.GONE
+                    showExtractStatusToast(status, node.name)
+                }
+            }
+            .setNegativeButton("Batal", null)
+            .show()
+    }
+
+    /**
+     * Dipanggil dari menu toolbar "Ekstrak Semua ke Folder Ini" saat sedang browsing arsip.
+     * Sengaja memanggil ULANG showExtractArchiveDialog() (Batch-4) yang sudah ada - bukan
+     * ditulis ulang - supaya pilihan "folder baru vs di sini" & input password tetap identik,
+     * tidak hilang cuma karena entry point-nya berubah dari tap langsung menjadi lewat menu.
+     */
+    private fun extractAllInBrowseMode() {
+        val state = viewModel.archiveBrowseState.value ?: return
+        showExtractArchiveDialog(state.archiveFile)
+    }
+
+    private fun showExtractStatusToast(status: ArchiveRepository.ExtractStatus, itemName: String) {
+        val message = when (status) {
+            ArchiveRepository.ExtractStatus.SUCCESS -> "Berhasil diekstrak: $itemName"
+            ArchiveRepository.ExtractStatus.WRONG_PASSWORD -> "Password salah"
+            ArchiveRepository.ExtractStatus.NEEDS_PASSWORD -> "Arsip ini butuh password"
+            ArchiveRepository.ExtractStatus.FAILED -> "Gagal mengekstrak"
+        }
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    // ---------------------------------------------------------------------
     // 6. CLIPBOARD (copy / move -> paste di folder tujuan)
     // ---------------------------------------------------------------------
     private fun setClipboard(cut: Boolean) {
@@ -423,14 +561,17 @@ class MainActivity : AppCompatActivity() {
             FileType.TEXT -> previewText(entry.file)
             FileType.PDF -> previewPdf(entry.file)
             FileType.ARCHIVE -> {
-                // Batch-4: baru format ZIP yang bisa diekstrak. Format arsip lain
-                // (7z/rar/tar/dll) menyusul di batch berikutnya sesuai roadmap.
+                // Batch-5: tap file .zip sekarang BROWSE isi arsip dulu (virtual folder,
+                // tanpa ekstrak), bukan langsung buka dialog ekstrak seperti Batch-4.
+                // Ekstrak (semua atau per-item) tetap tersedia dari dalam mode browse ini
+                // (lihat menu "Ekstrak Semua ke Folder Ini" & showExtractSingleEntryDialog).
+                // Format arsip lain (7z/rar/tar/dll) menyusul di batch berikutnya.
                 if (entry.isExtractableArchive()) {
-                    showExtractArchiveDialog(entry.file)
+                    enterArchiveMode(entry.file)
                 } else {
                     Toast.makeText(
                         this,
-                        "Format .${entry.extension()} belum didukung untuk ekstrak, menyusul di update berikutnya",
+                        "Format .${entry.extension()} belum didukung, menyusul di update berikutnya",
                         Toast.LENGTH_SHORT
                     ).show()
                 }
@@ -519,11 +660,22 @@ class MainActivity : AppCompatActivity() {
         return true
     }
 
+    // Batch-5: menu toolbar berbeda tergantung mode - listing folder biasa vs browse arsip.
+    override fun onPrepareOptionsMenu(menu: Menu): Boolean {
+        val browsing = viewModel.isBrowsingArchive
+        menu.findItem(R.id.action_new_folder)?.isVisible = !browsing
+        menu.findItem(R.id.action_folder_size)?.isVisible = !browsing
+        menu.findItem(R.id.action_sort)?.isVisible = !browsing
+        menu.findItem(R.id.action_extract_archive_all)?.isVisible = browsing
+        return super.onPrepareOptionsMenu(menu)
+    }
+
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
         return when (item.itemId) {
             R.id.action_new_folder -> { showNewFolderDialog(); true }
             R.id.action_folder_size -> { showFolderSizeDialog(); true }
             R.id.action_sort -> { toggleSort(); true }
+            R.id.action_extract_archive_all -> { extractAllInBrowseMode(); true }
             else -> super.onOptionsItemSelected(item)
         }
     }

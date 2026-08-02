@@ -107,6 +107,26 @@ class FileRepository {
         password: String?
     ): ArchiveRepository.ExtractStatus = archiveRepository.extractZip(archiveFile, destDir, password)
 
+    // ---------------------------------------------------------------------
+    // Batch-5: Browse isi arsip tanpa ekstrak (virtual folder). Pass-through
+    // ke ArchiveRepository, mengikuti pola yang sama seperti createArchive/
+    // extractArchive di atas.
+    // ---------------------------------------------------------------------
+    suspend fun listArchiveDirectory(
+        archiveFile: File,
+        internalPath: String,
+        password: String?
+    ): ArchiveRepository.ArchiveListResult =
+        archiveRepository.listDirectory(archiveFile, internalPath, password)
+
+    suspend fun extractArchiveEntry(
+        archiveFile: File,
+        node: ArchiveRepository.ArchiveNode,
+        destDir: File,
+        password: String?
+    ): ArchiveRepository.ExtractStatus =
+        archiveRepository.extractEntry(archiveFile, node, destDir, password)
+
     suspend fun folderSize(dir: File): Long =
         withContext(Dispatchers.IO) { FileOperations.folderSize(dir) }
 

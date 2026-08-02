@@ -3,13 +3,24 @@
 > Wajib dibaca AI sebelum melanjutkan proyek ini di sesi baru mana pun.
 
 ## Status Terakhir
-- **Versi/Batch selesai:** v1.4-batch4 (Archive Engine)
+- **Versi/Batch selesai:** v1.5-batch5 (Browse Isi Arsip Tanpa Ekstrak)
 - **Package:** `com.mahasiswa.filemanager`
-- **Belum ada file ini di repo sebelumnya** — dibuat pada sesi ini (retroaktif,
-  disusun ulang dari CHANGELOG.md v1.0 s/d v1.4-batch4). Riwayat di bawah
-  adalah rekonstruksi dari changelog, bukan log insiden real-time asli.
+- File ini pertama dibuat retroaktif di sesi sebelumnya (disusun ulang dari
+  CHANGELOG.md v1.0 s/d v1.4-batch4). Mulai v1.5-batch5, riwayat ditulis
+  live per batch.
 
 ## Riwayat Kronologis (dari CHANGELOG.md, jangan dihapus)
+- **v1.5-batch5** — Browse Isi Arsip Tanpa Ekstrak: tap file `.zip` sekarang
+  membuka isi arsip sebagai folder virtual (browse), bukan langsung dialog
+  ekstrak. Breadcrumb & navigasi back khusus mode arsip. Tap file di dalam
+  arsip -> "Ekstrak Item Ini" (satu file/folder saja). Dialog "Buat Arsip"
+  dan "Ekstrak Semua (pilihan tujuan)" Batch-4 dipertahankan 100%, kini
+  diakses lewat menu toolbar "Ekstrak Semua ke Folder Ini" saat browsing.
+  Adapter baru `ArchiveEntryAdapter` (terpisah dari `FileAdapter`) supaya
+  listing folder di disk tidak tersentuh sama sekali. Ini permulaan dari
+  konteks yang lebih besar: cakupan "identik ZArchiver Pro" yang mencakup
+  redesign UI/UX seluruh aplikasi, direncanakan bertahap di Batch-6 dst
+  (lihat bagian Roadmap).
 - **v1.0** — Setup awal MVP: browser folder+breadcrumb (akses penuh via
   MANAGE_EXTERNAL_STORAGE), preview gambar/teks/PDF (halaman pertama),
   rename batch pola `{n}`, search rekursif, copy/move (clipboard+"Tempel di
@@ -48,9 +59,19 @@
   rotasi layar & process death.
 - **Coroutine lifecycle-safe** (sejak v1.1): semua operasi background pakai
   `lifecycleScope`/`viewModelScope`, tidak ada `Thread{}.start()` mentah.
-- **Format arsip**: hanya ZIP yang didukung penuh (create+extract, AES-256
-  optional password, 4 level kompresi via zip4j). Format lain by design
-  belum dikerjakan — bukan bug.
+- **Format arsip**: hanya ZIP yang didukung penuh (create+extract+browse,
+  AES-256 optional password, 4 level kompresi via zip4j). Format lain by
+  design belum dikerjakan — bukan bug.
+- **Browse arsip via adapter terpisah** (sejak v1.5): `ArchiveEntryAdapter`
+  tidak menyentuh/mewarisi `FileAdapter` sama sekali, supaya perubahan di
+  satu tidak bisa meregresi yang lain. Struktur folder virtual arsip
+  dihitung dari `FileHeader.fileName` (bukan ekstraksi fisik).
+- **UI/UX target "identik ZArchiver Pro"** (disepakati saat kickoff
+  Batch-5): berlaku untuk SELURUH aplikasi (file browser utama, toolbar,
+  ikon, dll), dikerjakan bertahap per batch terpisah (bukan sekaligus),
+  behavior/fungsi yang ada wajib tetap identik - hanya tampilan yang
+  berubah. Referensi visual dicari sendiri (belum ada screenshot dari
+  user).
 
 ## Struktur Package/Modul Singkat
 ```
@@ -67,11 +88,23 @@ com.mahasiswa.filemanager/
 ├── FileOperations.kt     — logika inti I/O (dari Batch-1), kini dibungkus
 │                           oleh Repository; zipFiles() masih ada tapi
 │                           sudah tidak dipanggil dari UI
-├── FileAdapter.kt        — RecyclerView adapter + selection mode
+├── FileAdapter.kt        — RecyclerView adapter listing folder DISK +
+│                             selection mode (TIDAK disentuh oleh v1.5)
+├── ArchiveEntryAdapter.kt — RecyclerView adapter khusus isi ARSIP (baru
+│                             v1.5-batch5), terpisah total dari FileAdapter
 └── FileEntry.kt          — model data + kategori tipe file (termasuk
                              FileType.ARCHIVE, baru di v1.4-batch4)
 ```
 
 ## Belum Dikerjakan / Roadmap
-- Browse isi arsip tanpa ekstrak (virtual folder ala ZArchiver)
-- Dukungan penuh format 7z/rar/tar/gzip (saat ini hanya ikon dikenali)
+- Dukungan penuh format 7z/rar/tar/gzip (saat ini hanya ikon dikenali) -
+  termasuk browsing-nya
+- Search di dalam isi arsip (search box otomatis nonaktif saat browse
+  arsip di v1.5)
+- Mode seleksi multi-item di dalam browse arsip (ArchiveEntryAdapter belum
+  ada checkbox aktif)
+- **Redesign UI/UX seluruh aplikasi supaya identik ZArchiver Pro** —
+  disepakati dikerjakan bertahap mulai Batch-6: list file utama (row/
+  ikon/warna), lalu toolbar & menu, lalu dialog-dialog, lalu tema warna
+  & typography global. Behavior/fungsi wajib tetap identik di semua
+  batch ini.

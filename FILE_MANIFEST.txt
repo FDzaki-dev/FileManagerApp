@@ -1,11 +1,13 @@
 .github/workflows/build.yml
 .gitignore
 CHANGELOG.md
+FILE_MANIFEST.txt
 PROJECT_STATE.md
 README.md
 app/build.gradle
 app/proguard-rules.pro
 app/src/main/AndroidManifest.xml
+app/src/main/java/com/mahasiswa/filemanager/ArchiveEntryAdapter.kt
 app/src/main/java/com/mahasiswa/filemanager/ArchiveRepository.kt
 app/src/main/java/com/mahasiswa/filemanager/FileAdapter.kt
 app/src/main/java/com/mahasiswa/filemanager/FileEntry.kt

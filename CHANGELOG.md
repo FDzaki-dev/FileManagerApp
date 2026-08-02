@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.5-batch5
+Batch-5: Browse Isi Arsip Tanpa Ekstrak (virtual folder ala ZArchiver)
+- **Perubahan perilaku yang disengaja**: tap file `.zip` sekarang membuka
+  isi arsip sebagai folder virtual (browse), BUKAN langsung membuka dialog
+  ekstrak seperti Batch-4. Ini permintaan eksplisit di batch ini.
+- Breadcrumb saat browsing arsip menampilkan path di dalam arsip
+  (`.../nama_arsip.zip/folder/sub`), tap folder virtual masuk ke
+  dalamnya, tombol back naik satu level lalu keluar total ke listing
+  folder biasa saat sudah di akar arsip.
+- Tap file di dalam arsip menawarkan "Ekstrak Item Ini" (ekstrak SATU
+  file/folder saja ke folder aktif saat ini di storage asli), tanpa
+  perlu mengekstrak seluruh arsip.
+- **Tidak ada fitur Batch-4 yang hilang**: dialog "Buat Arsip"
+  (nama/password/level kompresi) dan dialog ekstrak-semua-dengan-pilihan-
+  tujuan tetap ada 100% sama, kini diakses lewat menu toolbar
+  "Ekstrak Semua ke Folder Ini" saat browsing (memanggil ulang fungsi
+  dialog Batch-4 yang sama, tidak ditulis ulang).
+- Format arsip lain (7z/rar/tar/dll) masih belum didukung sama sekali
+  (sesuai roadmap), termasuk untuk browsing - tetap dapat info "belum
+  didukung" seperti sebelumnya.
+- Adapter baru `ArchiveEntryAdapter` dibuat TERPISAH dari `FileAdapter`
+  supaya listing folder biasa di disk 0% tersentuh/berisiko regresi.
+- `ArchiveRepository`/`FileRepository`/`MainViewModel` Batch-3/4
+  (Repository Pattern, state persistence, createZip/extractZip) tidak
+  diubah sama sekali - browse ini murni penambahan fungsi baru
+  (`listDirectory`, `extractEntry`) di sampingnya.
+- Search box otomatis nonaktif selama mode browse arsip (belum ada
+  pencarian di dalam arsip di batch ini).
+
 ## v1.4-batch4
 Batch-4: Archive Engine - langkah pertama menuju "identik ZArchiver Pro"
 - Tambah `ArchiveRepository` baru (mengikuti pola Repository Pattern

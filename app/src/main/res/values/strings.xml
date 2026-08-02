@@ -26,4 +26,8 @@
     <string name="label_extract_here">Ekstrak ke folder ini</string>
     <string name="btn_extract">Ekstrak</string>
     <string name="hint_password_required">Arsip ini terkunci, masukkan password</string>
+
+    <!-- Batch-5: Browse Arsip Tanpa Ekstrak -->
+    <string name="btn_extract_this_item">Ekstrak Item Ini</string>
+    <string name="msg_extracting_to_current_folder">Item akan diekstrak ke folder saat ini</string>
 </resources>

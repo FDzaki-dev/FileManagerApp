@@ -13,4 +13,9 @@
         android:id="@+id/action_sort"
         android:title="Urutkan"
         app:showAsAction="never" />
+    <!-- Batch-5: hanya tampil saat mode browse arsip (lihat onPrepareOptionsMenu) -->
+    <item
+        android:id="@+id/action_extract_archive_all"
+        android:title="Ekstrak Semua ke Folder Ini"
+        app:showAsAction="never" />
 </menu>

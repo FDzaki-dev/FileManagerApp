@@ -274,4 +274,88 @@ class MainViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel(
             onResult(repository.formatSize(size), target.name)
         }
     }
+
+    // -----------------------------------------------------------------
+    // Batch-5: BROWSE ARSIP TANPA EKSTRAK (virtual folder ala ZArchiver)
+    // -----------------------------------------------------------------
+    // Sengaja TIDAK disimpan di SavedStateHandle (beda dari currentDir):
+    // ini state sementara saat melihat isi arsip, konsisten dengan alasan
+    // yang sama seperti `entries` (Batch-2) - kalau process death terjadi
+    // saat browsing arsip, cukup kembali ke listing folder biasa daripada
+    // menyimpan path internal arsip yang bisa jadi tidak valid lagi.
+    data class ArchiveBrowseState(val archiveFile: File, val internalPath: String, val password: String?)
+
+    private val _archiveBrowseState = MutableLiveData<ArchiveBrowseState?>(null)
+    val archiveBrowseState: LiveData<ArchiveBrowseState?> get() = _archiveBrowseState
+
+    private val _archiveEntries = MutableLiveData<List<ArchiveRepository.ArchiveNode>>(emptyList())
+    val archiveEntries: LiveData<List<ArchiveRepository.ArchiveNode>> get() = _archiveEntries
+
+    val isBrowsingArchive: Boolean get() = _archiveBrowseState.value != null
+
+    private var archiveLoadJob: Job? = null
+
+    /** Buka arsip di akar (dipanggil saat user tap file .zip di listing folder biasa). */
+    fun openArchiveBrowse(
+        archiveFile: File,
+        password: String?,
+        onResult: (ArchiveRepository.ArchiveListStatus) -> Unit
+    ) {
+        loadArchiveDirectory(ArchiveBrowseState(archiveFile, "", password), onResult)
+    }
+
+    /** Masuk ke sub-folder virtual di dalam arsip yang sedang dibuka. */
+    fun navigateIntoArchiveFolder(node: ArchiveRepository.ArchiveNode) {
+        val current = _archiveBrowseState.value ?: return
+        loadArchiveDirectory(current.copy(internalPath = node.internalPath)) {}
+    }
+
+    /** @return true kalau berhasil naik satu level (masih di dalam arsip); false kalau sudah di akar arsip. */
+    fun goUpInsideArchive(): Boolean {
+        val current = _archiveBrowseState.value ?: return false
+        if (current.internalPath.isEmpty()) return false
+        val trimmed = current.internalPath.trimEnd('/')
+        val parentPath = trimmed.substringBeforeLast('/', "")
+        val newPath = if (parentPath.isEmpty()) "" else "$parentPath/"
+        loadArchiveDirectory(current.copy(internalPath = newPath)) {}
+        return true
+    }
+
+    /** Keluar dari mode browse arsip, kembali ke listing folder biasa (currentDir tidak pernah berubah). */
+    fun closeArchiveBrowse() {
+        archiveLoadJob?.cancel()
+        _archiveBrowseState.value = null
+        _archiveEntries.value = emptyList()
+    }
+
+    private fun loadArchiveDirectory(
+        state: ArchiveBrowseState,
+        onResult: (ArchiveRepository.ArchiveListStatus) -> Unit
+    ) {
+        archiveLoadJob?.cancel()
+        _isLoading.value = true
+        archiveLoadJob = viewModelScope.launch {
+            val result = repository.listArchiveDirectory(state.archiveFile, state.internalPath, state.password)
+            if (!isActive) return@launch
+            _isLoading.value = false
+            if (result.status == ArchiveRepository.ArchiveListStatus.SUCCESS) {
+                _archiveBrowseState.value = state
+                _archiveEntries.value = result.entries
+            }
+            onResult(result.status)
+        }
+    }
+
+    /** Ekstrak satu item (file/folder) dari arsip yang sedang dibrowse, ke [destDir] di storage asli. */
+    fun extractArchiveEntry(
+        node: ArchiveRepository.ArchiveNode,
+        destDir: File,
+        onResult: (status: ArchiveRepository.ExtractStatus) -> Unit
+    ) {
+        val state = _archiveBrowseState.value ?: return
+        viewModelScope.launch {
+            val status = repository.extractArchiveEntry(state.archiveFile, node, destDir, state.password)
+            onResult(status)
+        }
+    }
 }
