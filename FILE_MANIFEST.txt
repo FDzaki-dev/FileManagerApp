@@ -16,6 +16,7 @@ app/src/main/java/com/mahasiswa/filemanager/FileRepository.kt
 app/src/main/java/com/mahasiswa/filemanager/MainActivity.kt
 app/src/main/java/com/mahasiswa/filemanager/MainViewModel.kt
 app/src/main/res/drawable/circle_uncheck.xml
+app/src/main/res/drawable/divider_line.xml
 app/src/main/res/drawable/ic_archive.xml
 app/src/main/res/drawable/ic_audio.xml
 app/src/main/res/drawable/ic_back.xml

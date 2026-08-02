@@ -3,13 +3,26 @@
 > Wajib dibaca AI sebelum melanjutkan proyek ini di sesi baru mana pun.
 
 ## Status Terakhir
-- **Versi/Batch selesai:** v1.5.1-batch5.1 (Suggested App / ACTION_VIEW)
+- **Versi/Batch selesai:** v1.6-batch6 (Redesign List File — tahap 1)
 - **Package:** `com.mahasiswa.filemanager`
 - File ini pertama dibuat retroaktif di sesi sebelumnya (disusun ulang dari
   CHANGELOG.md v1.0 s/d v1.4-batch4). Mulai v1.5-batch5, riwayat ditulis
   live per batch.
 
+## AI Assumption Log (wajib, sesuai aturan kerja)
+- **[v1.6-batch6]** Karena tidak ada screenshot asli ZArchiver Pro dari
+  user, batch ini TIDAK mengubah palet warna (colors.xml tetap) - hanya
+  elemen struktural (divider, kepadatan row) yang diubah. Asumsi: warna
+  saat ini (`#1F6F54` hijau tosca + `#F2A93B` oranye) dipertahankan sampai
+  ada referensi visual presisi. Kalau user kirim screenshot, ini perlu
+  ditinjau ulang di batch berikutnya.
+
 ## Riwayat Kronologis (dari CHANGELOG.md, jangan dihapus)
+- **v1.6-batch6** — Redesign List File Utama (tahap 1 dari cakupan "identik
+  ZArchiver Pro"): row lebih dense (padding 10dp→8dp, minHeight 56dp),
+  garis pemisah tipis antar row (`DividerItemDecoration` + drawable baru)
+  yang otomatis berlaku di listing disk maupun browse arsip. Murni visual,
+  0 perubahan logika. Warna BELUM disentuh (lihat AI Assumption Log).
 - **v1.5.1-batch5.1** — Suggested App: `AndroidManifest.xml` dapat 3
   intent-filter `ACTION_VIEW` baru (arsip zip, teks/dokumen, media) supaya
   app muncul di dialog "Buka dengan" sistem saat user tap file dari app

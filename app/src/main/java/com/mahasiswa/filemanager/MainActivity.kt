@@ -297,6 +297,11 @@ class MainActivity : AppCompatActivity() {
         )
         recyclerView.layoutManager = LinearLayoutManager(this)
         recyclerView.adapter = adapter
+        // Batch-6: garis pemisah tipis antar row, dipakai bareng oleh adapter disk & arsip
+        // (satu RecyclerView yang sama, adapter-nya yang di-swap).
+        val divider = androidx.recyclerview.widget.DividerItemDecoration(this, LinearLayoutManager.VERTICAL)
+        androidx.core.content.ContextCompat.getDrawable(this, R.drawable.divider_line)?.let { divider.setDrawable(it) }
+        recyclerView.addItemDecoration(divider)
     }
 
     private fun onEntryClick(entry: FileEntry) {

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Batch-6: garis pemisah tipis antar row list, dipasang lewat DividerItemDecoration
+     di MainActivity.setupRecyclerView() - berlaku untuk listing folder & browse arsip
+     (RecyclerView yang sama dipakai keduanya). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android">
+    <size android:height="1dp" />
+    <solid android:color="@color/divider" />
+</shape>

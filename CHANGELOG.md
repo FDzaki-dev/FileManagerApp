@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.6-batch6
+Batch-6: Redesign List File Utama — tahap 1 dari cakupan "identik ZArchiver Pro"
+- **Catatan jujur soal cakupan**: batch ini HANYA elemen struktural yang bisa
+  ditentukan tanpa referensi visual presisi (garis pemisah, kepadatan row,
+  ukuran ikon). Warna/hex eksak TIDAK diklaim identik 100% karena AI tidak
+  bisa mengekstrak nilai piksel dari hasil pencarian gambar - kalau user
+  kirim screenshot asli ZArchiver Pro, batch berikutnya bisa jauh lebih
+  presisi soal warna/ikon.
+- `item_file.xml`: padding row 10dp→8dp, tambah `minHeight=56dp` (list
+  lebih dense/rapat, konsisten dengan gaya file manager minimalis).
+- `drawable/divider_line.xml` baru: garis pemisah tipis 1dp antar row.
+- `MainActivity.setupRecyclerView()`: pasang `DividerItemDecoration` yang
+  dipakai bersama oleh listing folder disk MAUPUN browse arsip (Batch-5) -
+  satu RecyclerView yang sama, jadi otomatis konsisten di kedua mode tanpa
+  perubahan di FileAdapter/ArchiveEntryAdapter.
+- Tidak ada perubahan logika/behavior sama sekali - murni visual.
+
 ## v1.5.1-batch5.1
 Batch-5.1: Muncul di "Buka dengan" (Suggested App) untuk ZIP & berkas mainstream
 - `AndroidManifest.xml`: tambah 3 intent-filter `ACTION_VIEW` di `MainActivity`
